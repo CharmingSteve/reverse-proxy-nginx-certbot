@@ -1,0 +1,68 @@
+version: '3.7'
+services:
+  certbot:
+    container_name: 'certbot'
+    build: 
+      context: .
+      dockerfile: Dockerfile-certbot 
+    restart: unless-stopped
+    volumes:
+      - ../docker-volumes/etc/letsencrypt:/etc/letsencrypt
+      - ../docker-volumes/var/lib/letsencrypt:/var/lib/letsencrypt
+      - ../docker-volumes/letsencrypt-docker-nginx/src/letsencrypt/letsencrypt-site:/data/letsencrypt
+      - ../docker-volumes/aws:/root/.aws
+      - ../docker-volumes/etc/nginx/conf.d:/etc/nginx/conf.d
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /dev/log:/dev/log
+      - /etc/localtime:/etc/localtime:ro 
+      - ../docker-volumes/var/log:/var/log
+    logging:
+      options:
+        max-size: 50m
+        # If you are manually renewing all of your certificates, the --force-renewal - https://certbot.eff.org/docs/using.html?highlight=hook#pre-and-post-validation-hooks 
+####FIX -d to use .env file !!!
+    entrypoint: "/bin/sh -c 'trap exit TERM; while :; do certbot  certonly --dns-route53 --email support@charming.co.il  --max-log-backups 5 --agree-tos --no-eff-email --non-interactive -d b.charmingwebdesign.com -d charmingwebdesign.com -d milknhoney.co.il -d charming.click -d charming.cloud -d gindi.cloud -d charmingsteve.com -d charming.co.il -d charmingcloud.net --expand; sleep 24h & wait $${!}; done;'"
+
+
+# -d charming.click -d charming.cloud -d gindi.cloud -d charmingsteve.clom -d charming.co.il -d charmingcloud.net --expand
+    #original
+#     entrypoint: "/bin/sh -c 'trap exit TERM; while :; do certbot  certonly  --webroot --webroot-path /data/letsencrypt --email support@charmingcloud.io  --max-log-backups 5 --agree-tos --no-eff-email --non-interactive -d b.charmingwebdesign.com -d b.milknhoney.co.il -d b.charmingcloud.io; /etc/letsencrypt/renewal-hooks/deploy/edit-domain-name-for-cert.sh; sleep 24h & wait $${!}; done;'"
+
+      ##  Add deploy hook either in etc\letsencrypt\renewal-hooks\deploy or here with flag, it needs to edit nginx default.conf with correct domain, then restart nginx  ## ADD post hook restarts nginx with docker  
+     # https://github.com/certbot/certbot/issues/6180#issuecomment-539233867 
+     # put  --staging in the certbot command when fiddling
+     # moved --post-hook /etc/letsencrypt/renewal-hooks/deploy/edit-domain-name-for-cert.sh - to after semicolon  
+
+    healthcheck:
+      test: ["CMD", "ls", "/etc/letsencrypt/live/b.charmingwebdesign.com"]
+      interval: 1m
+      timeout: 2s
+      retries: 2
+      start_period: 90s
+
+  nginx:  
+    container_name: 'nginx'
+    image: nginx:1.21.3
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ../docker-volumes/html:/html
+      - ../docker-volumes/etc/nginx/conf.d:/etc/nginx/conf.d
+      - ../docker-volumes/etc/letsencrypt:/etc/letsencrypt
+      - ../docker-volumes/var/lib/letsencrypt:/var/lib/letsencrypt 
+      - ../docker-volumes/letsencrypt-docker-nginx/src/letsencrypt/letsencrypt-site:/data/letsencrypt
+      - /etc/localtime:/etc/localtime:ro 
+      - /dev/log:/dev/log
+    logging:
+      options:
+        max-size: 50m
+    # entrypoint: "/bin/sh -c 'while :; do sleep 24h & wait $${!}; /usr/sbin/nginx -s reload; done & nginx -g \"daemon off;\"'"
+#    healthcheck:
+#      test: [ "CMD", "curl",  "https://${CHARM}" ]
+#      interval: 1m
+#      timeout: 2s
+#      retries: 3
+#      start_period: 40s
+#
